@@ -38,6 +38,19 @@ class FaceDetector:
             raise ModelUnavailable("Falta el localizador de rostros o su archivo está dañado. Ejecuta scripts/download_assets.py.")
         self.detector = cv2.FaceDetectorYN_create(str(FACE_MODEL), "", (320, 320), 0.85, 0.3, 1000)
 
+    def landmarks(self, frame: np.ndarray) -> list[dict]:
+        """Rostros con sus 5 puntos (ojos, nariz, comisuras) en coordenadas del cuadro completo."""
+        height, width = frame.shape[:2]
+        scale = min(1.0, 640 / max(height, width))
+        small = cv2.resize(frame, (round(width * scale), round(height * scale)))
+        self.detector.setInputSize((small.shape[1], small.shape[0]))
+        _, found = self.detector.detect(small)
+        if found is None:
+            return []
+        faces = [{"box": face[:4] / scale, "points": face[4:14].reshape(5, 2) / scale, "confidence": float(face[-1])}
+                 for face in found]
+        return sorted(faces, key=lambda face: float(face["box"][2] * face["box"][3]), reverse=True)
+
     def find(self, frame: np.ndarray) -> list[dict]:
         height, width = frame.shape[:2]
         scale = min(1.0, 640 / max(height, width))

@@ -1,41 +1,24 @@
-# Trazabilidad académica — versión 3 (monitoreo en vivo)
+# Trazabilidad académica — versión 4 (documento final)
 
-Los umbrales académicos provienen del entregable 2. Los pesos, la arquitectura y el tratamiento de incertidumbre son recomendaciones técnicas del prototipo, no exigencias inventadas del curso.
+Fuente: *Documento final – proyecto integrador VeriCall* (Grupo 1). Esta matriz vincula cada sección con lo que el prototipo implementa y con lo que queda fuera de su alcance. Los pesos de los componentes son preliminares, igual que los umbrales del documento.
 
-| Fuente y requisito | Evidencia implementada | Qué falta |
+| Sección del documento final | Evidencia implementada | Qué falta para un piloto |
 |---|---|---|
-| Entregable 1: verificar «en tiempo real» la transferencia solicitada por videollamada | Modo *Llamada en vivo*: simulación, cámara o ventana compartida de Zoom/Meet/Teams; ~2 cuadros/s; alerta y evaluación del pago durante la llamada; `live.py` | Integración por API de la plataforma de video y con el sistema de pagos. |
-| Entregable 1: analizar señales de manipulación | YuNet + ViT sobre recortes; `detector.py`, `pipeline.py` | Audio, sincronía, identidad y validación en ataques representativos. |
-| Entregable 2: puntaje 0–100, rangos 0–30, 31–70 y 71–100 | `decision.py`, razones y trazabilidad | Calibrar pesos y umbrales con costos y evidencia real. |
-| Entregable 2: cuenta nueva y monto mayor al límite obliga revisión | Reglas independientes del detector; pruebas automáticas | Contrastar los campos con ERP y políticas del cliente. |
-| Entregable 2: 0–30 «el analista confirma y el pago sale» | Riesgo bajo con evidencia suficiente recomienda autorizar; el analista confirma en la resolución | Calibrar el umbral con costos reales. |
-| Entregable 2: no autorizar sin evidencia suficiente | Ausencia de rostro, incertidumbre o calidad insuficiente fuerzan revisión; en vivo se usa la evidencia más desfavorable entre la llamada y los últimos ~8 s | Verificación independiente comprobable y autenticación de analistas. |
-| Entregable 2: nunca liberar un bloqueo crítico sin verificación alterna | `decision.resolve`: solo Seguridad, con canal alterno descrito y persona distinta del solicitante; una resolución inmutable por decisión | Autenticación real y evidencia comprobable del canal alterno. |
-| Entregable 2: oportunidad ≤ 15 min | Tiempo entre recomendación y resolución, con cumplimiento del objetivo, en cada registro | Medirlo en operación real. |
-| Entregable 2: no decidir sin registro | SQLite de solo inserción encadenado por hashes antes de publicar el resultado; `/api/audit/verify` detecta ediciones; pruebas de fallo y de alteración | Acceso por roles, cifrado/retención y anclaje externo del último hash. |
-| Entregable 2: cinco métricas de aceptabilidad | Seis muestras públicas evaluadas con todas sus salidas y un falso negativo visible | Las metas de fraude detenido, fricción, tiempos, equidad y trazabilidad operativa no se han demostrado. |
-| PDF p. 16: flujo, 3–5 datos críticos, calidad y trazabilidad | Manifiesto de fuentes/hashes; versión del modelo y reglas; tabla siguiente y diagrama en alcance | Redactar y justificar avance de sesión 3 en máximo 2 páginas. |
-| PDF p. 17: tres riesgos, controles, triggers, autoridad y supervisión | Matriz preliminar siguiente, cola limitada, validación y revisión | Acordar responsables, reglas de suspensión y liberación; redactar sesión 4 en máximo 2 páginas. |
-| PDF pp. 9 y 11: escrito final y sustentación | Demo reproducible, exportación y documentación | Documento máximo 10 páginas y defensa; fecha del escrito: 11 de noviembre de 2026, según pp. 2 y 13. |
+| 2. Decisión crítica: autorizar o bloquear hasta verificar por canal alterno | Recomendación en vivo durante la llamada (`live.py`) y en grabaciones; la persona confirma (`decision.resolve`) | Integración por API con Zoom/Teams/Meet y con el sistema de pagos. |
+| 3. Criterios: bandas 0–30 / 31–70 / 71–100 | `decision.band`, versión `umbrales-v1.0-documento-final` en cada registro | Firma del CFO del cliente sobre los umbrales. |
+| 3. Cuenta nueva o monto sobre el límite fuerza revisión | Reglas `new_beneficiary` y `over_limit`, con cualquier puntaje | Contrastar con ERP y banca reales. |
+| 3. Cinco métricas con bandas aceptable/alerta/crítico | `governance.dashboard`: fraude detenido, fricción, oportunidad, trazabilidad; equidad «sin medir» | Ataques simulados mensuales representativos y pruebas con perfiles diversos. |
+| 4. Cinco datos críticos | Señal del modelo; perfil enrolado y consentimiento (`config/directory.json`); historial (monto y horario habituales); cuenta (nueva, extranjera, lista de fraude); conexión (cámara virtual, IP/VPN, dispositivo) | Datos reales; hoy el perfil, el historial y la conexión son simulados o declarados. Ver [pasaporte del dato](pasaporte_datos.md). |
+| 4. «Sin evidencia suficiente no se autoriza»; no enrolado va a revisión | Sin rostros suficientes, zona incierta, calidad deficiente, varios rostros, no enrolado, perfil vencido (> 1 año) o consentimiento revocado fuerzan revisión | Reconocimiento facial contra la referencia enrolada y análisis de voz. |
+| 4. Trazabilidad: ID único, datos, versión de modelo y umbral, puntajes, acción y justificación | Registro encadenado por hashes con todo lo anterior; `/api/audit/verify`; exportación JSON por ID | Anclaje externo del último hash y conciliación diaria de pagos sin ID. |
+| 4. No se aceptan cambios sin justificación escrita | Toda resolución exige justificación salvo confirmar un riesgo bajo | — |
+| 4. Se conserva la huella del archivo y las señales, no el video | SHA-256 del video; cuadros y recortes se descartan en memoria | Cifrado y política de retención aprobada. |
+| 5. Cinco componentes y tres razones principales | `decision.evaluate`: `components` y `top_reasons` | Calibrar pesos con costos y casos reales. |
+| 5. La automatización solo frena; matriz por banda | Analista libera 0–70 (31–70 con canal alterno); 71–100 solo el CFO, u otro directivo si el solicitante es el CFO; segregación frente al analista y a la persona suplantada | Doble autenticación y permisos por rol (hoy los roles se declaran). |
+| 6. Riesgos R1–R3 y secundarios | R1: falso negativo `fake_04` visible; confianza ciega: tasa de desacuerdo; saturación: cola acotada y pendientes en el tablero | R2 (referencia comprometida) y R3 (filtración) requieren controles de infraestructura. |
+| 7. Disparadores y modo seguro | Métricas críticas, fraude simulado liberado y perfiles vencidos generan disparadores; modo seguro solo por Riesgo VeriCall, con motivo, en la bitácora; mientras está activo todo pago va a revisión | Notificación real al comité de riesgo y al CFO. |
+| 7. Vallas permanentes | Nunca se autoriza un puntaje > 70 (verificación en código); cola llena rechaza en lugar de aprobar; versiones de reglas, umbrales y modelo en cada registro | Flujo formal de aprobación de cambios de modelo. |
+| 8. RACI y derechos del titular | Matriz visible en el panel de gobierno; consentimiento revocado excluye la biometría y envía el pago al canal alterno | Contrato y matriz firmados; procedimiento de revocación. |
+| 9. Condiciones de implementación | El tablero muestra qué condiciones se miden y cuáles no | Piloto en paralelo (recomienda pero no bloquea) con criterio de salida. |
 
-## Cinco datos críticos para el avance 3
-
-| Dato | Origen / transformación | Calidad y trazabilidad |
-|---|---|---|
-| Video | Muestra pública autorizada o carga local; 24 instantes y recortes temporales | Extensión y decodificación, tamaño/duración, hash; no se retiene el archivo subido. |
-| Señal del modelo | Pesos y revisión fijados; salida por rostro y media de máximos por instante | Modelo local verificado, cobertura facial, dispersión, zona incierta y versión del pipeline. |
-| Monto y límite | Declaración del operador, comparación decimal | Positivos, finitos, dos decimales; deben contrastarse con ERP en un piloto. |
-| Cuenta del beneficiario | Declaración de cuenta nueva | Regla de revisión obligatoria; no existe historial bancario conectado. |
-| Autorización y verificación alterna | Consentimiento declarado al iniciar la llamada o el análisis; canal alterno descrito en la resolución | Se registran ambos con nombre, rol y hora; la verificación no se comprueba externamente. |
-
-## Matriz preliminar de riesgo y control para el avance 4
-
-| Riesgo | Evidencia / disparador | Control actual | Responsable propuesto |
-|---|---|---|---|
-| Suplantación omitida o falsa alarma | El ejemplo `fake_04` produce un falso negativo; señales intermedias son inciertas | Mostrar límites y motivos; revisión humana y canal alterno; no usar el modelo como comprobación de identidad | Seguridad evalúa el detector; tesorería verifica la solicitud. |
-| Datos o inferencia no confiables | Video inválido, sin rostros, monto inválido, modelo ausente o hash diferente | Rechazo o resultado inconcluso; sin predicción simulada de respaldo | Responsable de datos y operación técnica. |
-| Uso indebido de datos o pérdida de trazabilidad | Falta de autorización, fallo de almacenamiento, exposición de imágenes | Entrada con autorización declarada, eliminación temporal, bitácora sin imágenes, fallo cerrado al no poder registrar | Privacidad y seguridad, pendientes de designación formal. |
-
-La asignación anterior es una propuesta para discusión, no un esquema de autoridad ya aprobado. El prototipo sí implementa un proceso de liberación con roles declarados (analista / seguridad) y segregación de funciones, pero sin autenticación. Antes de una prueba organizacional deben definirse autenticación, evidencia de verificación alterna, quién puede suspender el modelo y quién responde ante errores.
-
-Los resultados de seis ejemplos apoyan la explicación del sistema y sus límites. No constituyen validación independiente ni justifican afirmar que se cumple el 98 % de fraude detenido o las demás metas del entregable 2.
+Los resultados de seis ejemplos ilustran el mecanismo y sus límites. No validan el 98 % de fraude detenido ni las demás metas del documento final.

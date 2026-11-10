@@ -1,123 +1,258 @@
+{% macro context_fields() %}
+<details class="disclosure">
+  <summary>Señales de la cuenta y la conexión <span class="muted">opcional</span></summary>
+  <p class="help">En producción llegan de la banca, de listas de fraude y de la plataforma de video. Aquí las declaras para la demostración.</p>
+  <div class="toggle-list">
+    <label class="toggle"><input name="account_foreign" type="checkbox" value="yes"><span>Cuenta extranjera</span></label>
+    <label class="toggle"><input name="account_fraud_list" type="checkbox" value="yes"><span>Cuenta en lista de fraude</span></label>
+    <label class="toggle"><input name="virtual_camera" type="checkbox" value="yes"><span>Cámara virtual detectada</span></label>
+    <label class="toggle"><input name="unusual_connection" type="checkbox" value="yes"><span>IP, ubicación o VPN inusual</span></label>
+    <label class="toggle"><input name="new_device" type="checkbox" value="yes"><span>Dispositivo no reconocido</span></label>
+  </div>
+</details>
+{% endmacro %}
+{% macro payment_fields() %}
+<div class="grid-2">
+  <label class="field">Monto solicitado<span class="money"><i>$</i><input name="amount" type="number" min="0.01" max="1000000000000" step="0.01" value="500000" required></span></label>
+  <label class="field">Límite del cliente<span class="money"><i>$</i><input name="limit" type="number" min="0.01" max="1000000000000" step="0.01" value="1000000" required></span></label>
+</div>
+<label class="toggle"><input name="new_beneficiary" type="checkbox" value="yes"><span>La cuenta del beneficiario es nueva</span></label>
+{{ context_fields() }}
+<label class="field">Analista que registra la solicitud<input name="analyst" type="text" maxlength="80" value="Analista de tesorería"></label>
+{% endmacro %}
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#102d3a">
-  <title>VeriCall · Verificación de videollamadas</title>
+  <meta name="theme-color" content="#0f2a36">
+  <title>VeriCall · ¿Es real quien pide el pago?</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230a7f7c'/%3E%3Ctext x='16' y='23' font-size='19' font-family='Arial' font-weight='700' fill='white' text-anchor='middle'%3EV%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/" aria-label="VeriCall, inicio"><span class="brand-symbol">V</span>VeriCall<span class="version">LAB</span></a>
-  <div class="top-actions"><span id="model-status" class="status"><i></i>Verificando modelo</span><span id="integrity-status" class="status"><i></i>Bitácora</span><a href="#history">Bitácora ↗</a></div>
+  <a class="brand" href="#llamada" aria-label="VeriCall, inicio"><span class="logo">V</span>VeriCall</a>
+  <nav class="nav" aria-label="Secciones">
+    <a href="#llamada" data-nav="llamada">Llamada</a>
+    <a href="#grabacion" data-nav="grabacion">Grabación</a>
+    <a href="#gobierno" data-nav="gobierno">Gobierno</a>
+    <a href="#bitacora" data-nav="bitacora">Bitácora <span id="pending-count" class="count" hidden></span></a>
+  </nav>
+  <div class="chips">
+    <span id="safe-mode-chip" class="chip warn" hidden><i></i>Modo seguro</span>
+    <span id="model-chip" class="chip"><i></i>Modelo</span>
+    <span id="integrity-chip" class="chip"><i></i>Bitácora</span>
+  </div>
 </header>
+
+<div id="safe-mode-banner" class="banner warn" role="status" hidden><strong>Modo seguro activo.</strong> <span id="safe-mode-text"></span> Todo pago pasa a verificación por canal alterno.</div>
+<div id="global-error" class="banner danger" role="alert" hidden></div>
+
 <main>
-  <div class="intro"><p class="eyebrow">VERIFICACIÓN EN VIVO · DECISIONES TRAZABLES</p><h1>¿Es real quien te pide el pago?<br><span>Compruébalo durante la llamada.</span></h1><p class="lead">VeriCall analiza el rostro del interlocutor mientras habla y, cuando solicita una transferencia, recomienda autorizarla, verificarla por otro canal o bloquearla, con razones registradas.</p></div>
-  <div id="global-error" class="error" role="alert" hidden></div>
-  <div class="mode-switch" role="tablist" aria-label="Modo de trabajo"><button type="button" class="active" id="mode-live" role="tab" aria-selected="true"><i class="rec-dot"></i>Llamada en vivo</button><button type="button" id="mode-recording" role="tab" aria-selected="false">Analizar grabación</button></div>
+  <!-- ==================== LLAMADA ==================== -->
+  <section id="view-llamada" class="view" data-view="llamada">
 
-  <div id="live-workspace" class="workspace">
-    <section class="panel source-panel">
-      <div class="section-title"><span class="step">01</span><h2>Conecta la llamada</h2></div>
-      <fieldset id="live-setup">
-        <div class="tabs three" role="tablist" aria-label="Fuente de la llamada"><button type="button" class="active" data-source="simulated" role="tab" aria-selected="true">Simulación</button><button type="button" data-source="camera" role="tab" aria-selected="false">Cámara</button><button type="button" data-source="screen" role="tab" aria-selected="false">Zoom / Meet</button></div>
-        <div data-source-panel="simulated"><p class="hint">Elige quién te llamará. Las versiones manipuladas simulan a un atacante que suplanta al directivo.</p><div id="live-sample-grid" class="sample-grid"></div><label class="drop-zone compact-drop" for="live-file"><strong>O usa un video propio</strong><span>MP4, MOV o WebM. Se reproduce solo en tu navegador; no se sube.</span><input id="live-file" type="file" accept=".mp4,.mov,.webm,video/*"></label><p id="live-file-name" class="hint" hidden></p></div>
-        <div data-source-panel="camera" hidden><p class="hint">Usa tu cámara web como interlocutor real. Sirve para mostrar cómo se comporta el sistema con una persona auténtica.</p></div>
-        <div data-source-panel="screen" hidden><p class="hint">Comparte la ventana de Zoom, Meet o Teams donde aparece quien llama. VeriCall analiza esa ventana igual que lo haría una integración con la plataforma.</p></div>
-        <label class="field">Quién dice ser el interlocutor<input id="caller" type="text" maxlength="80" value="Carlos Ruiz · Director financiero"></label>
-        <label class="check consent"><input id="live-consent" type="checkbox"><span>Los participantes autorizaron el análisis de su imagen en esta llamada (Ley 1581 de 2012). No se guardan imágenes, solo señales.</span></label>
-      </fieldset>
-      <button id="live-start" class="primary" type="button">Iniciar monitoreo <span>→</span></button>
-      <button id="live-end" class="primary danger" type="button" hidden>Finalizar llamada <span>■</span></button>
-      <hr>
-      <form id="live-transfer-form">
-        <fieldset id="live-transfer-fields" disabled>
-          <div class="section-title compact"><span class="step">02</span><h2>Solicitud de transferencia</h2></div>
-          <p class="hint">Cuando el interlocutor pida un pago, regístralo aquí. VeriCall lo evalúa con la evidencia acumulada en la llamada.</p>
-          <div class="input-grid"><label>Monto solicitado<input name="amount" type="number" min="0.01" max="1000000000000" step="0.01" value="500000" required></label><label>Límite del cliente<input name="limit" type="number" min="0.01" max="1000000000000" step="0.01" value="1000000" required></label></div>
-          <label class="check"><input name="new_beneficiary" type="checkbox" value="yes"><span>La cuenta del beneficiario es nueva</span></label>
-          <label class="field">Analista responsable<input name="analyst" type="text" maxlength="80" value="Analista de tesorería"></label>
-          <p id="evidence-gate" class="gate">Inicia la llamada para reunir evidencia.</p>
-          <button class="primary" type="submit">Evaluar transferencia <span>→</span></button>
-        </fieldset>
-      </form>
-    </section>
-    <div class="analysis-column">
-      <section class="panel call-panel">
-        <div id="call-stage" class="call-stage">
-          <video id="live-video" playsinline muted></video>
-          <canvas id="live-overlay" aria-hidden="true"></canvas>
-          <div id="call-placeholder" class="call-placeholder"><span class="empty-mark">◎</span>Inicia el monitoreo para conectar la llamada</div>
-          <div class="call-hud" hidden id="call-hud"><span class="live-pill"><i></i>EN VIVO <b id="call-clock">00:00</b></span><span id="live-badge" class="badge neutral">Reuniendo evidencia</span></div>
-          <div class="call-caller" hidden id="call-caller"><small>Dice ser</small><strong id="call-caller-name"></strong></div>
-          <div id="incoming" class="incoming" hidden><div class="ring"><span class="brand-symbol">V</span></div><p>Videollamada entrante</p><strong id="incoming-name"></strong><div><button id="incoming-accept" type="button" class="accept-call">Contestar</button><button id="incoming-decline" type="button" class="decline-call">Rechazar</button></div></div>
+    <div id="call-setup">
+      <div class="page-head">
+        <div>
+          <h1>¿Es real quien te pide el pago?</h1>
+          <p class="lead">Elige una situación, contesta la llamada y deja que VeriCall analice el rostro mientras habla. Cuando pida una transferencia, recibirás una recomendación con sus razones. <strong>Sin evidencia suficiente no se autoriza.</strong></p>
         </div>
-        <div id="live-alert" class="alert-banner" role="alert" hidden><strong>Alerta: posible deepfake en esta llamada.</strong> La señal de manipulación es alta en los últimos segundos. No autorices pagos solicitados en esta llamada sin verificar por otro canal.</div>
-        <div class="signal"><div><span>Señal de manipulación · últimos <span id="window-seconds">8</span> s</span><strong id="live-score">—</strong></div><div class="meter"><span id="live-meter"></span></div><p id="live-status-text" class="hint">Salida del modelo sin calibrar. Una señal baja no verifica la identidad.</p></div>
-        <div class="metrics"><div><strong id="live-frames">0</strong><span>cuadros analizados</span></div><div><strong id="live-coverage">—</strong><span>cobertura facial</span></div><div><strong id="live-latency">—</strong><span>por cuadro, en CPU local</span></div></div>
-        <div class="chart-heading"><h3>Señal durante la llamada</h3><span>Últimos 2 minutos · cada punto es un cuadro</span></div>
-        <svg id="live-timeline" viewBox="0 0 720 160" role="img" aria-label="Señal de manipulación por cuadro durante la llamada"></svg>
-        <div class="chart-legend"><span><i class="dot low"></i>Señal baja</span><span><i class="dot medium"></i>Zona incierta</span><span><i class="dot high"></i>Señal alta</span></div>
-        <h3 class="events-title">Eventos de la llamada</h3>
-        <ol id="call-events" class="call-events"><li class="muted">Sin eventos todavía.</li></ol>
-      </section>
-      <div id="live-decisions" class="decision-list"></div>
-    </div>
-  </div>
+        <ol class="steps" aria-label="Cómo funciona">
+          <li><b>1</b>Elige quién llama</li><li><b>2</b>Contesta y observa</li><li><b>3</b>Registra el pago</li><li><b>4</b>Decide con autoridad</li>
+        </ol>
+      </div>
 
-  <div id="recording-workspace" class="workspace" hidden>
-    <section class="panel source-panel">
-      <div class="section-title"><span class="step">01</span><h2>Prepara el análisis</h2></div>
-      <form id="analysis-form">
+      <div class="setup-grid">
+        <div class="card">
+          <div class="card-head">
+            <h2>1 · ¿Quién llama?</h2>
+            <div class="segmented" role="tablist" aria-label="Forma de preparar la llamada">
+              <button type="button" class="active" data-setup-tab="scenarios" role="tab" aria-selected="true">Escenarios guiados</button>
+              <button type="button" data-setup-tab="manual" role="tab" aria-selected="false">Configurar</button>
+            </div>
+          </div>
+
+          <div data-setup-panel="scenarios">
+            <div id="scenario-grid" class="scenario-grid"></div>
+          </div>
+
+          <div data-setup-panel="manual" hidden>
+            <p class="help">Elige de dónde viene el video de la llamada.</p>
+            <div class="source-grid" role="radiogroup" aria-label="Fuente de la llamada">
+              <button type="button" class="source-card" data-source="simulated" role="radio" aria-checked="true"><span class="icon">▶</span><strong>Video de ejemplo</strong><small>Original o manipulado</small></button>
+              <button type="button" class="source-card" data-source="file" role="radio" aria-checked="false"><span class="icon">⬆</span><strong>Video propio</strong><small>No se sube al servidor</small></button>
+              <button type="button" class="source-card" data-source="camera" role="radio" aria-checked="false"><span class="icon">◉</span><strong>Mi cámara</strong><small>Interlocutor real</small></button>
+              <button type="button" class="source-card" data-source="deepfake_camera" role="radio" aria-checked="false"><span class="icon">◐</span><strong>Mi cámara + deepfake</strong><small>Haz tú de atacante</small></button>
+              <button type="button" class="source-card" data-source="screen" role="radio" aria-checked="false"><span class="icon">▢</span><strong>Zoom / Meet</strong><small>Comparte la ventana</small></button>
+            </div>
+
+            <div data-source-panel="simulated" class="source-panel">
+              <div class="filter-row"><span class="help">Videos públicos con etiqueta del editor:</span>
+                <div class="segmented small" id="sample-filter"><button type="button" class="active" data-filter="all">Todos</button><button type="button" data-filter="fake">Manipulados</button><button type="button" data-filter="real">Originales</button></div></div>
+              <div id="live-sample-list" class="sample-list"></div>
+            </div>
+            <div data-source-panel="file" class="source-panel" hidden>
+              <label class="dropzone" for="live-file"><strong>Elige un video</strong><span>MP4, MOV o WebM. Se reproduce en tu navegador; al servidor solo llegan cuadros sueltos y su huella SHA-256.</span><input id="live-file" type="file" accept=".mp4,.mov,.webm,video/*"></label>
+              <p id="live-file-name" class="help" hidden></p>
+            </div>
+            <div data-source-panel="camera" class="source-panel" hidden><p class="help">Tu cámara web hace de interlocutor real. El navegador pedirá permiso. Ojo: la webcam está fuera del dominio de entrenamiento y puede caer en zona incierta.</p></div>
+            <div data-source-panel="screen" class="source-panel" hidden><p class="help">Comparte la ventana de Zoom, Meet o Teams donde aparece quien llama. VeriCall la analiza como lo haría una integración con la plataforma.</p></div>
+            <div data-source-panel="deepfake_camera" class="source-panel" hidden>
+              <p class="help">VeriCall cambia en vivo tu rostro por el de otra persona y analiza ese video. Elige el rostro que vas a suplantar: actores del DeepFake Detection Dataset que consintieron su uso en investigación.</p>
+              <div id="swap-presets" class="swap-presets"></div>
+              <details class="disclosure"><summary>Usar la foto de alguien que lo autorizó</summary>
+                <label class="toggle"><input id="swap-consent" type="checkbox"><span>La persona de la foto autorizó usar su rostro en esta demostración académica.</span></label>
+                <label class="dropzone compact" for="swap-photo"><strong>Elige una foto frontal</strong><span>Solo vive en memoria del servidor.</span><input id="swap-photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
+              </details>
+              <p id="swap-status" class="help">Sin rostro elegido.</p>
+              <p class="fine">Motor clásico (OpenCV, 5 puntos faciales): sigue tu cabeza, pero la boca del rostro de origen no se mueve.</p>
+            </div>
+          </div>
+        </div>
+
+        <aside class="card setup-summary">
+          <h2>2 · Detalles de la llamada</h2>
+          <div id="setup-choice" class="setup-choice"><span class="muted">Elige un escenario o una fuente.</span></div>
+          <label class="field">Dice ser<select id="live-requester" name="requester_id" data-directory></select></label>
+          <div class="profile" data-profile-for="live-requester"></div>
+          <label class="toggle consent"><input id="live-consent" type="checkbox"><span>Los participantes autorizaron el análisis de su imagen (Ley 1581 de 2012). No se guardan imágenes, solo señales.</span></label>
+          <button id="live-start" class="btn primary block" type="button" disabled>Iniciar llamada</button>
+        </aside>
+      </div>
+    </div>
+
+    <div id="call-room" hidden>
+      <div class="room-grid">
+        <div class="stage-col">
+          <div id="call-stage" class="stage">
+            <video id="live-video" playsinline muted></video>
+            <canvas id="live-overlay" aria-hidden="true"></canvas>
+            <div id="incoming" class="incoming" hidden>
+              <div class="ring"><span class="logo">V</span></div>
+              <p>Videollamada entrante</p><strong id="incoming-name"></strong>
+              <div class="incoming-actions"><button id="incoming-decline" type="button" class="round decline" aria-label="Rechazar">✕</button><button id="incoming-accept" type="button" class="round accept" aria-label="Contestar">✆</button></div>
+            </div>
+            <div class="hud top"><span class="live-pill"><i></i>EN VIVO <b id="call-clock">00:00</b></span><span id="swap-pill" class="tag danger" hidden>DEEPFAKE SIMULADO</span></div>
+            <div class="hud bottom"><div class="caller"><small>Dice ser</small><strong id="call-caller-name"></strong></div><button id="live-end" class="round decline" type="button" aria-label="Finalizar llamada" title="Finalizar llamada">✕</button></div>
+          </div>
+          <div id="live-alert" class="banner danger inline" role="alert" hidden><strong>Posible deepfake.</strong> La señal de manipulación es alta en los últimos segundos. No autorices pagos de esta llamada sin verificar por otro canal.</div>
+          <div class="card compact">
+            <div class="card-head"><h3>Señal durante la llamada</h3><span class="legend"><i class="dot ok"></i>Baja <i class="dot warn"></i>Incierta <i class="dot danger"></i>Alta</span></div>
+            <svg id="live-timeline" class="timeline" viewBox="0 0 720 150" role="img" aria-label="Señal de manipulación por cuadro"></svg>
+            <details class="disclosure"><summary>Eventos de la llamada</summary><ol id="call-events" class="events"><li class="muted">Sin eventos todavía.</li></ol></details>
+          </div>
+        </div>
+
+        <aside class="risk-col">
+          <div class="card risk-card">
+            <p class="eyebrow">Riesgo visual en vivo · últimos <span id="window-seconds">8</span> s</p>
+            <div id="live-gauge" class="gauge-wrap"></div>
+            <p id="live-status" class="status-line neutral">Reuniendo evidencia…</p>
+            <p id="live-status-text" class="help">Se necesitan al menos 4 cuadros con rostro.</p>
+            <dl class="stats"><div><dt>Cuadros</dt><dd id="live-frames">0</dd></div><div><dt>Con rostro</dt><dd id="live-coverage">—</dd></div><div><dt>Por cuadro</dt><dd id="live-latency">—</dd></div></dl>
+            <button id="request-payment" class="btn primary block big" type="button" disabled>El interlocutor pide un pago</button>
+            <p id="evidence-gate" class="help center">Reuniendo evidencia…</p>
+          </div>
+          <div id="call-requests" class="request-list"></div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== GRABACIÓN ==================== -->
+  <section id="view-grabacion" class="view" data-view="grabacion" hidden>
+    <div class="page-head"><div><h1>Analizar una grabación</h1><p class="lead">Analiza un video completo en 24 instantes y obtén la recomendación para la transferencia, con la evidencia de cada instante.</p></div></div>
+    <div class="setup-grid recording-grid">
+      <form id="analysis-form" class="card" novalidate>
         <fieldset id="form-fields">
-          <div class="tabs" role="tablist" aria-label="Origen del video"><button type="button" class="active" id="samples-tab" role="tab" aria-selected="true">Ejemplos públicos</button><button type="button" id="upload-tab" role="tab" aria-selected="false">Subir video</button></div>
-          <div id="sample-section"><p class="hint">Compara el original con su versión manipulada.</p><div id="sample-grid" class="sample-grid"></div><p class="source-note">Unidata · <a href="https://huggingface.co/datasets/ud-biometrics/deepfake-dataset" target="_blank" rel="noopener">Ver fuente y licencia ↗</a><br>CC BY-NC-ND 4.0 · Uso no comercial, archivos originales.</p></div>
-          <div id="upload-section" hidden><label class="drop-zone" for="video-file"><span class="upload-icon">↑</span><strong>Selecciona un video</strong><span>MP4, MOV, AVI o WebM · hasta 100 MB / 2 min</span><input id="video-file" type="file" accept=".mp4,.mov,.avi,.webm"></label><p id="filename" class="hint">El archivo se elimina del servidor al terminar.</p></div>
-          <hr>
-          <div class="section-title compact"><span class="step">02</span><h2>Contexto de la transferencia</h2></div>
-          <p class="hint">Estos datos modifican el riesgo del pago, no la detección del video.</p>
-          <div class="input-grid"><label>Monto solicitado<input id="amount" name="amount" type="number" min="0.01" max="1000000000000" step="0.01" value="500000" required></label><label>Límite del cliente<input id="limit" name="limit" type="number" min="0.01" max="1000000000000" step="0.01" value="1000000" required></label></div>
-          <label class="check"><input name="new_beneficiary" type="checkbox" value="yes"><span>La cuenta del beneficiario es nueva</span></label>
-          <label class="field">Analista responsable<input name="analyst" type="text" maxlength="80" value="Analista de tesorería"></label>
-          <label class="check consent"><input name="consent" type="checkbox" value="yes" required><span>Tengo autorización para analizar este video y acepto el uso académico de las muestras.</span></label>
-          <button id="analyze-button" class="primary" type="submit">Analizar video <span>→</span></button>
+          <div class="card-head"><h2>1 · Video</h2>
+            <div class="segmented" role="tablist"><button type="button" class="active" id="samples-tab" role="tab" aria-selected="true">Ejemplos</button><button type="button" id="upload-tab" role="tab" aria-selected="false">Subir video</button></div></div>
+          <div id="sample-section">
+            <div class="filter-row"><span class="help">Etiqueta del editor; el modelo no la ve.</span><div class="segmented small" id="recording-filter"><button type="button" class="active" data-filter="all">Todos</button><button type="button" data-filter="fake">Manipulados</button><button type="button" data-filter="real">Originales</button></div></div>
+            <div id="sample-list" class="sample-list"></div>
+          </div>
+          <div id="upload-section" hidden><label class="dropzone" for="video-file"><strong>Elige un video</strong><span>MP4, MOV, AVI o WebM · hasta 100 MB y 2 minutos. Se elimina del servidor al terminar.</span><input id="video-file" type="file" accept=".mp4,.mov,.avi,.webm"></label><p id="filename" class="help"></p></div>
+          <h2 class="section-gap">2 · Pago y solicitante</h2>
+          <label class="field">Solicitante<select id="recording-requester" name="requester_id" data-directory></select></label>
+          <div class="profile" data-profile-for="recording-requester"></div>
+          {{ payment_fields() }}
+          <label class="toggle consent"><input name="consent" type="checkbox" value="yes"><span>Tengo autorización para analizar este video y acepto el uso académico de las muestras.</span></label>
+          <button id="analyze-button" class="btn primary block" type="submit">Analizar video</button>
+          <p class="fine">Personas 01–05: Unidata, CC BY-NC-ND 4.0. Actores DFD: Google/Jigsaw DeepFake Detection Dataset, actores con consentimiento; términos de <a href="https://github.com/ondyari/FaceForensics" target="_blank" rel="noopener">FaceForensics++</a>, investigación no comercial.</p>
         </fieldset>
       </form>
-    </section>
-    <div class="analysis-column">
-      <section class="panel preview-panel"><div class="section-title"><span class="step">03</span><h2>Inspecciona la evidencia</h2><span id="reference-label" class="badge neutral">Selecciona un video</span></div><div class="video-stage"><video id="preview" controls playsinline preload="metadata"></video><div id="preview-placeholder">Selecciona un ejemplo o carga tu video</div></div><p id="video-caption" class="hint">La etiqueta de referencia no se utiliza para calcular la predicción.</p></section>
-      <section id="progress-panel" class="panel progress-panel" aria-live="polite" hidden><div><strong id="progress-message">Preparando análisis</strong><span id="progress-percent">0 %</span></div><progress id="progress-bar" max="100" value="0"></progress><p class="hint">El análisis se ejecuta en tu equipo. La primera ejecución carga el modelo y puede tardar más.</p></section>
-      <section id="empty-result" class="panel empty-result"><span class="empty-mark">◎</span><h2>Un resultado que puedes revisar</h2><p>Recibirás una clasificación visual, evidencia por instante y una recomendación de tesorería con sus razones.</p><div class="three-items"><span>Rostros analizados</span><span>Incertidumbre visible</span><span>Registro exportable</span></div></section>
-      <section id="result-panel" class="panel" hidden aria-live="polite">
-        <div class="result-header"><div><p class="eyebrow">CLASIFICACIÓN VISUAL</p><h2 id="verdict-title"></h2><p id="confidence-text" class="hint"></p></div><a id="export-link" class="secondary" href="#">Exportar JSON ↓</a></div>
-        <div class="signal"><div><span>Puntuación de manipulación</span><strong id="model-score"></strong></div><div class="meter"><span id="model-meter"></span></div><p class="hint">Salida del modelo, sin calibración para estimar la probabilidad real de fraude.</p></div>
-        <div class="metrics"><div><strong id="face-count"></strong><span>instantes con rostro</span></div><div><strong id="coverage"></strong><span>cobertura facial</span></div><div><strong id="elapsed"></strong><span>de procesamiento</span></div></div>
-        <div id="reference-comparison" class="comparison" hidden></div>
-        <div class="chart-heading"><h3>Señal a lo largo del video</h3><span>Haz clic en un punto para ir a ese instante</span></div><svg id="timeline" viewBox="0 0 720 160" role="img" aria-label="Puntuación de manipulación por instante analizado"></svg>
-        <div class="chart-legend"><span><i class="dot low"></i>Señal baja</span><span><i class="dot medium"></i>Zona incierta</span><span><i class="dot high"></i>Señal alta</span></div>
+      <div class="result-col">
+        <div class="card"><div class="stage small"><video id="preview" controls playsinline preload="metadata"></video><div id="preview-placeholder" class="placeholder">Elige un video</div></div><p id="video-caption" class="help"></p></div>
+        <div id="progress-panel" class="card" aria-live="polite" hidden><div class="progress-head"><strong id="progress-message">Preparando análisis</strong><span id="progress-percent">0 %</span></div><progress id="progress-bar" max="100" value="0"></progress></div>
+        <div id="result-panel" class="card" hidden aria-live="polite">
+          <div class="card-head"><div><p class="eyebrow">Clasificación visual</p><h2 id="verdict-title"></h2><p id="confidence-text" class="help"></p></div></div>
+          <div id="reference-comparison" class="note" hidden></div>
+          <div class="card-head"><h3>Señal a lo largo del video</h3><span class="help">Clic en un punto para ir a ese instante</span></div>
+          <svg id="timeline" class="timeline" viewBox="0 0 720 150" role="img" aria-label="Señal por instante"></svg>
+          <dl class="stats"><div><dt>Instantes con rostro</dt><dd id="face-count"></dd></div><div><dt>Cobertura</dt><dd id="coverage"></dd></div><div><dt>Procesamiento</dt><dd id="elapsed"></dd></div></dl>
+          <details class="disclosure"><summary>Datos técnicos e instantes</summary><dl id="technical-data" class="kv"></dl><div class="table-wrap"><table><thead><tr><th>Instante</th><th>Rostros</th><th>Señal</th><th></th></tr></thead><tbody id="frame-table"></tbody></table></div></details>
+        </div>
         <div id="recording-decision"></div>
-        <details><summary>Ver datos técnicos y trazabilidad</summary><dl id="technical-data"></dl><div class="table-scroll"><table><thead><tr><th>Instante</th><th>Rostros</th><th>Señal</th><th>Inspección</th></tr></thead><tbody id="frame-table"></tbody></table></div></details>
-      </section>
+      </div>
     </div>
-  </div>
+  </section>
 
-  <section id="history" class="panel history-panel"><div class="section-title"><h2>Bitácora de decisiones</h2><button id="refresh-history" class="text-button" type="button">Actualizar ↻</button></div><p class="hint">Resultados, motivos y decisiones humanas guardados localmente en una cadena de hashes: si alguien edita o borra un registro intermedio, la verificación falla. Los videos y recortes de rostros nunca se guardan. <span id="integrity-detail"></span></p><div class="table-scroll"><table><thead><tr><th>Fecha · Bogotá</th><th>Origen</th><th>Señal visual</th><th>Recomendación</th><th>Decisión final</th><th>Informe</th></tr></thead><tbody id="history-body"></tbody></table></div></section>
-  <footer><strong>VeriCall · Proyecto académico</strong><p>Detector visual experimental. Puede producir falsos positivos y omitir deepfakes. No analiza audio ni sincronía labial. Los roles se declaran sin autenticación. Las muestras públicas sirven para explorar esos límites.</p><a href="https://huggingface.co/prithivMLmods/Deep-Fake-Detector-v2-Model" target="_blank" rel="noopener">Ficha del modelo ↗</a></footer>
+  <!-- ==================== GOBIERNO ==================== -->
+  <section id="view-gobierno" class="view" data-view="gobierno" hidden>
+    <div class="page-head"><div><h1>Gobierno y monitoreo</h1><p class="lead">Las cinco métricas del documento final, sus disparadores y los controles que permiten detener el sistema.</p></div><button id="refresh-governance" class="btn ghost" type="button">Actualizar</button></div>
+    <p id="governance-note" class="note"></p>
+    <div id="kpi-grid" class="kpi-grid"></div>
+    <div class="gov-grid">
+      <div class="card"><h2>Disparadores</h2><ul id="trigger-list" class="trigger-list"></ul></div>
+      <div class="card"><h2>Monitoreo</h2><dl id="monitoring-data" class="kv"></dl></div>
+      <form id="safe-mode-form" class="card" novalidate>
+        <h2>Modo seguro</h2>
+        <p class="help">Solo <strong>Riesgo de VeriCall</strong> lo activa o lo levanta. Mientras está activo, todo pago va a verificación alterna. Se informa al comité de riesgo y al CFO del cliente.</p>
+        <input type="hidden" name="role" value="riesgo">
+        <label class="field">Tu nombre (Riesgo VeriCall)<input name="actor" type="text" maxlength="80"></label>
+        <label class="field">Motivo<input name="reason" type="text" maxlength="500" placeholder="Ej.: detección en ataques simulados bajo 95 %"></label>
+        <p class="form-error" role="alert" hidden></p>
+        <button id="safe-mode-button" type="submit" class="btn danger block">Activar modo seguro</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Quién decide</h2>
+      <div class="table-wrap"><table class="matrix"><thead><tr><th>Banda</th><th>El sistema</th><th>La persona</th><th>Quién libera el pago</th></tr></thead><tbody>
+        <tr><td><span class="tag ok">0–30 Aceptar</span></td><td>Recomienda autorizar y muestra las razones.</td><td>El analista confirma; siempre puede frenarlo.</td><td>Analista de tesorería</td></tr>
+        <tr><td><span class="tag warn">31–70 Revisar</span></td><td>Retiene el pago.</td><td>El analista llama al número registrado, nunca a uno dado en la llamada.</td><td>Analista, tras verificación exitosa</td></tr>
+        <tr><td><span class="tag danger">71–100 Rechazar</span></td><td>Bloquea y alerta a seguridad.</td><td>Seguridad investiga y el CFO decide.</td><td>Solo el CFO; si el solicitante es el CFO, otro directivo</td></tr>
+      </tbody></table></div>
+      <ul class="guardrails"><li>Nunca se autoriza un puntaje mayor a 70.</li><li>Cuenta nueva, monto sobre el límite, solicitante no enrolado, perfil vencido o consentimiento revocado envían el pago a revisión.</li><li>Si la cola se satura, los pagos esperan en lugar de aprobarse.</li><li>Ninguna resolución contraria a la recomendación sin justificación escrita.</li><li>Versiones vigentes: <span id="versions-text"></span></li></ul>
+    </div>
+  </section>
+
+  <!-- ==================== BITÁCORA ==================== -->
+  <section id="view-bitacora" class="view" data-view="bitacora" hidden>
+    <div class="page-head"><div><h1>Bitácora</h1><p class="lead">Cada solicitud, su recomendación y la decisión humana, encadenadas por hashes. Si alguien edita un registro intermedio, la verificación falla. Nunca se guardan videos ni rostros.</p></div><button id="refresh-history" class="btn ghost" type="button">Actualizar</button></div>
+    <p id="integrity-detail" class="note"></p>
+    <div class="card"><div class="table-wrap"><table class="history"><thead><tr><th>Fecha</th><th>ID</th><th>Origen</th><th>Solicitante</th><th>Puntaje</th><th>Recomendación</th><th>Decisión final</th></tr></thead><tbody id="history-body"></tbody></table></div><p class="help">Haz clic en una fila para ver el detalle o resolver una solicitud pendiente.</p></div>
+  </section>
 </main>
 
-<template id="resolution-template">
-  <form class="resolution" novalidate>
-    <p class="eyebrow">DECISIÓN HUMANA FINAL</p>
-    <p class="rule hint"></p>
-    <div class="input-grid"><label>Rol<select name="role"><option value="analista">Analista de tesorería</option><option value="seguridad">Área de seguridad</option></select></label><label>Nombre<input name="actor" type="text" maxlength="80" required></label></div>
-    <label class="check"><input name="alternate_verified" type="checkbox" value="yes"><span>Verifiqué la solicitud por un canal alterno<small>Por ejemplo, llamada al número registrado del directivo.</small></span></label>
-    <label class="field">Canal usado y resultado<input name="channel" type="text" maxlength="200" placeholder="Ej.: llamé al +57 300… registrado; confirmó el pago"></label>
-    <p class="sla hint"></p>
+<footer><strong>VeriCall · Proyecto académico, Grupo 1</strong><span>Detector visual experimental: puede producir falsas alarmas y omitir deepfakes. No analiza voz. Roles declarados sin autenticación; directorio, historial y señales de conexión simulados.</span><a href="https://huggingface.co/prithivMLmods/Deep-Fake-Detector-v2-Model" target="_blank" rel="noopener">Ficha del modelo</a></footer>
+
+<dialog id="payment-dialog" class="dialog" aria-labelledby="dialog-title">
+  <div class="dialog-head"><h2 id="dialog-title">Solicitud de pago</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button></div>
+  <form id="transfer-form" class="dialog-body" novalidate>
+    <p class="help">Registra lo que pide el interlocutor. VeriCall lo evalúa con la evidencia acumulada en la llamada.</p>
+    {{ payment_fields() }}
     <p class="form-error" role="alert" hidden></p>
-    <div class="resolution-actions"><button type="button" class="release" data-outcome="release">Liberar pago</button><button type="button" class="reject" data-outcome="reject">Rechazar pago</button></div>
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn primary">Evaluar solicitud</button></div>
   </form>
-</template>
+  <div id="dialog-decision" class="dialog-body" hidden></div>
+</dialog>
+
+<dialog id="detail-dialog" class="dialog" aria-label="Detalle de la decisión">
+  <div class="dialog-head"><h2>Detalle de la solicitud</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button></div>
+  <div id="detail-body" class="dialog-body"></div>
+</dialog>
 </body>
 </html>

@@ -9,7 +9,9 @@ import pytest
 from vericall.app import create_app
 from vericall.audit import AuditError
 from vericall.config import FACE_MODEL, ROOT
-from vericall.decision import InputError, evaluate, positive_money
+from datetime import datetime, timezone
+
+from vericall.decision import InputError, evaluate, find_requester, positive_money
 from vericall.detector import digest_file, model_status
 from vericall.jobs import JobManager, QueueFull
 from vericall.pipeline import analyze, summarize
@@ -23,9 +25,12 @@ def detection(score=0.1, face_count=12):
     return result
 
 
+MIDDAY = datetime(2026, 11, 10, 15, 0, tzinfo=timezone.utc)  # 10:00 en Bogotá
+
+
 def decision(result=None, **overrides):
     values = dict(amount="500000", limit="1000000", new_beneficiary=False,
-                  detection=result or detection())
+                  detection=result or detection(), requester=find_requester("carolina_ruiz"), now=MIDDAY)
     values.update(overrides)
     return evaluate(**values)
 
@@ -69,6 +74,7 @@ def test_business_gates_and_risk_separation():
     assert decision(amount="1000001")["action"] == "revisar_canal_alterno"
     assert decision(detection(0.9))["action"] == "bloquear_y_escalar"
     assert decision(detection(0.9), new_beneficiary=True, amount="1000001")["score"] == 100
+    assert decision(detection(0.9))["band"] == "rechazar" and decision()["band"] == "aceptar"
     # La cuenta nueva modifica el puntaje de pago, no la evidencia visual.
     evidence = detection(.1)
     original = json.dumps(evidence)
@@ -101,7 +107,7 @@ def test_binary_class_and_uncertainty_are_distinct():
 def test_upload_job_audit_export_and_cleanup(application):
     app, seen = application
     client = app.test_client()
-    response = client.post("/api/analyses", data={"consent": "yes", "sample_id": "custom",
+    response = client.post("/api/analyses", data={"consent": "yes", "sample_id": "custom", "requester_id": "carolina_ruiz",
         "video": (io.BytesIO(b"test bytes for dependency-injected analysis"), "name.mp4")})
     job = wait_job(client, response)
     assert job["status"] == "done"
@@ -135,6 +141,7 @@ def test_validation_and_consent_before_processing(application):
     response = client.post("/api/analyses", data={"consent": "yes", "video": (io.BytesIO(b"text"), "bad.txt")})
     assert response.status_code == 400 and "Formato" in response.json["error"]
     assert client.post("/api/analyses", data={"consent": "yes", "amount": "NaN"}).status_code == 400
+    assert client.post("/api/analyses", data={"consent": "yes", "requester_id": "nadie"}).status_code == 400
     assert seen == []
     assert client.get("/api/jobs/missing").status_code == 404
     assert client.get("/api/decisions/missing").status_code == 404
@@ -222,3 +229,44 @@ def test_trained_model_offline_and_filename_independence(tmp_path, monkeypatch):
     assert result["fake_score"] > genuine["fake_score"]
     assert result["sampled_frames"] == 24
     assert digest_file(renamed) == digest_file(manipulated)
+
+
+def test_five_components_and_top_three_reasons():
+    result = decision(detection(.2), new_beneficiary=True, amount="900000",
+                      context={"virtual_camera": True, "new_device": True})
+    assert set(result["components"]) == {"authenticity", "profile", "history", "account", "connection"}
+    assert result["components"]["connection"]["points"] == 40
+    assert result["components"]["account"]["points"] == 25
+    assert result["top_reasons"][0] == "Cámara virtual detectada."
+    assert len(result["top_reasons"]) == 3
+    assert result["thresholds"]["version"] and result["rule_version"] == "risk-v4.0"
+
+
+def test_identity_rules_force_review_without_enough_evidence():
+    # Sin evidencia suficiente no se autoriza: no enrolado, perfil vencido o consentimiento revocado.
+    assert decision(requester=find_requester("no_enrolado"))["action"] == "revisar_canal_alterno"
+    expired = decision(requester=find_requester("andres_pardo"), amount="1000")
+    assert expired["action"] == "revisar_canal_alterno" and "profile_expired" in expired["mandatory_review"]
+    revoked = decision(detection(.9), requester=find_requester("sofia_herrera"), amount="1000")
+    assert revoked["action"] == "revisar_canal_alterno"
+    assert not any(r["code"] == "visual_model" for r in revoked["reasons"])
+    assert revoked["components"]["authenticity"]["measured"] is False
+
+
+def test_history_anomalies_and_safe_mode():
+    night = datetime(2026, 11, 11, 4, 0, tzinfo=timezone.utc)  # 23:00 en Bogotá
+    assert any(r["code"] == "atypical_hour" for r in decision(now=night)["reasons"])
+    assert any(r["code"] == "atypical_amount" for r in decision(amount="900000")["reasons"])
+    safe = decision(safe_mode=True)
+    assert safe["action"] == "revisar_canal_alterno" and safe["safe_mode"] is True
+    assert decision(context={"account_fraud_list": True})["action"] == "revisar_canal_alterno"
+
+
+def test_scenarios_reference_existing_samples_and_people(application):
+    app, _ = application
+    data = app.test_client().get("/api/scenarios").json
+    ids = {e["id"] for e in json.loads((ROOT / "config/directory.json").read_text())["executives"]}
+    assert len(data["scenarios"]) >= 5
+    for scenario in data["scenarios"]:
+        assert scenario["requester_id"] in ids
+        assert scenario["source"] in ("simulated", "deepfake_camera")

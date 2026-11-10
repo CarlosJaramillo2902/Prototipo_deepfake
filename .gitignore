@@ -12,3 +12,6 @@ models/
 sample_data/public/
 *.part
 reports/local_*.json
+
+# Secretos locales (p. ej. ELEVENLABS_API_KEY); nunca a Git.
+.env

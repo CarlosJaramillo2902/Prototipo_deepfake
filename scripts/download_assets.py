@@ -58,7 +58,7 @@ def main():
     parser.add_argument("--only", choices=["model", "samples", "all"], default="all")
     args = parser.parse_args()
     manifest = json.loads((ROOT / "config/assets.json").read_text())
-    print("Modelo Apache-2.0. Videos de Unidata CC BY-NC-ND 4.0, para demostración académica sin modificaciones.", flush=True)
+    print("Modelo Apache-2.0. Videos de Unidata (CC BY-NC-ND 4.0) y del DeepFake Detection Dataset de Google/Jigsaw (términos de FaceForensics++, investigación no comercial), sin modificaciones.", flush=True)
     for asset in manifest["assets"]:
         if args.only in ("all", asset["group"]):
             download(asset)

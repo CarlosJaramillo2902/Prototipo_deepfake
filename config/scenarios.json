@@ -1,0 +1,112 @@
+{
+  "version": "escenarios-v1",
+  "note": "Escenarios guiados para la sustentación. El resultado esperado es el habitual; en vivo la señal varía según el momento de la llamada.",
+  "scenarios": [
+    {
+      "id": "ataque",
+      "title": "Ataque con deepfake",
+      "tone": "danger",
+      "source": "simulated",
+      "sample_id": "dfd_fake_05",
+      "requester_id": "carolina_ruiz",
+      "story": "La «gerente general» llama y pide un pago urgente de $450.000.",
+      "transfer": {
+        "amount": "450000",
+        "limit": "1000000"
+      },
+      "expected": "bloquear_y_escalar",
+      "lesson": "Señal visual alta: bloqueo automático. Solo el CFO puede liberarlo, tras llamar al número registrado."
+    },
+    {
+      "id": "real",
+      "title": "Interlocutor real",
+      "tone": "ok",
+      "source": "simulated",
+      "sample_id": "dfd_real_07",
+      "requester_id": "carolina_ruiz",
+      "story": "Una persona auténtica pide un pago habitual de $120.000.",
+      "transfer": {
+        "amount": "120000",
+        "limit": "1000000"
+      },
+      "expected": "autorizar_pendiente_confirmacion",
+      "lesson": "Riesgo bajo: el analista confirma y el pago sale. La persona siempre puede frenarlo."
+    },
+    {
+      "id": "falso_negativo",
+      "title": "Deepfake que engaña al modelo",
+      "tone": "warn",
+      "source": "simulated",
+      "sample_id": "fake_04",
+      "requester_id": "carolina_ruiz",
+      "story": "Un deepfake bien hecho pide pagar a una cuenta nueva.",
+      "transfer": {
+        "amount": "300000",
+        "limit": "1000000",
+        "new_beneficiary": true
+      },
+      "expected": "revisar_canal_alterno",
+      "lesson": "El modelo no lo detecta, pero la regla de cuenta nueva obliga a verificar. Por eso las reglas se imponen al puntaje."
+    },
+    {
+      "id": "avatar",
+      "title": "Avatar generativo que pasa como real",
+      "tone": "danger",
+      "source": "simulated",
+      "sample_id": "thb_fake_aniportrait",
+      "requester_id": "daniel_ortiz",
+      "story": "Una foto animada con IA (tipo HeyGen u OmniHuman) pide un pago de $350.000.",
+      "transfer": {
+        "amount": "350000",
+        "limit": "1000000"
+      },
+      "expected": "autorizar_pendiente_confirmacion",
+      "lesson": "El detector, entrenado con cambios de rostro, no ve los avatares generativos. Si el analista no verifica, el fraude pasa: por eso la persona siempre puede frenar y los montos altos o cuentas nuevas fuerzan revisión."
+    },
+    {
+      "id": "cfo",
+      "title": "Suplantación del CFO",
+      "tone": "danger",
+      "source": "simulated",
+      "sample_id": "dfd_fake_03",
+      "requester_id": "maria_gomez",
+      "story": "Alguien suplanta a la CFO y pide $900.000.",
+      "transfer": {
+        "amount": "900000",
+        "limit": "1000000"
+      },
+      "expected": "bloquear_y_escalar",
+      "lesson": "Si el suplantado es el CFO, solo otro directivo autorizado puede liberar el bloqueo (segregación de funciones)."
+    },
+    {
+      "id": "falsa_alarma",
+      "title": "Falsa alarma",
+      "tone": "warn",
+      "source": "simulated",
+      "sample_id": "dfd_real_05",
+      "requester_id": "carolina_ruiz",
+      "story": "Una persona real, pero el modelo la ve sospechosa.",
+      "transfer": {
+        "amount": "200000",
+        "limit": "1000000"
+      },
+      "expected": "revisar_canal_alterno",
+      "lesson": "Un falso positivo retiene un pago legítimo. La verificación alterna lo libera en minutos: es el costo aceptado de la seguridad."
+    },
+    {
+      "id": "atacante",
+      "title": "Haz tú de atacante",
+      "tone": "danger",
+      "source": "deepfake_camera",
+      "swap_preset": "dfd_real_05",
+      "requester_id": "carolina_ruiz",
+      "story": "Tu cámara se convierte en otra persona en vivo, como una cámara virtual.",
+      "transfer": {
+        "amount": "450000",
+        "limit": "1000000"
+      },
+      "expected": null,
+      "lesson": "Un deepfake casero en tiempo real. Puede o no engañar al detector: así se ve el límite de la señal visual."
+    }
+  ]
+}

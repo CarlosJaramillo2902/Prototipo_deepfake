@@ -24,3 +24,16 @@ Los enlaces de la ficha a un dataset comercial más grande no son necesarios: es
 `videos/moving_shapes.avi` y `videos/frozen_shapes.avi` fueron generados por `generate_videos.py` y no contienen personas. Sirven para comprobar que el detector devuelve evidencia insuficiente cuando no hay rostro. No son ejemplos de deepfake. `invalid/not_a_video.txt` comprueba el rechazo de formato. También se prueba texto renombrado como `.mp4` para verificar que la extensión no reemplaza la decodificación.
 
 El manifiesto `cases.json` describe únicamente estas pruebas negativas; la interfaz utiliza los videos públicos declarados en `config/assets.json`.
+
+## Avatares generativos (TalkingHeadBench)
+
+**Fuente:** https://huggingface.co/datasets/luchaoqi/TalkingHeadBench (arXiv 2505.24866), licencia MIT, sujeta a las licencias de FFHQ y CelebV-HQ (investigación no comercial). Revisión y SHA-256 fijados en `config/assets.json`.
+
+| Nombre local | Generador | Señal medida |
+|---|---|---:|
+| public/thb_fake_hallo2.mp4 | Hallo2 | 72 |
+| public/thb_fake_liveportrait.mp4 | LivePortrait | 72 |
+| public/thb_fake_hallo.mp4 | Hallo | 20 |
+| public/thb_fake_aniportrait.mp4 | AniPortrait (audio) | 12 |
+
+Selección: se evaluaron los dos primeros clips de prueba de seis generadores (12 en total) y se eligieron cuatro para la demostración. Ninguno de los 12 superó 75; la selección es declarada y no mide desempeño.

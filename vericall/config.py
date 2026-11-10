@@ -27,3 +27,11 @@ LIVE_MAX_SESSIONS = 3
 LIVE_IDLE_SECONDS = 600
 # Entregable 2, criterio de oportunidad: liberar un pago retenido en ≤ 15 minutos.
 RESOLUTION_SLA_SECONDS = 15 * 60
+
+# Documento final: umbrales versionados. Ningún cambio de umbral entra sin versión registrada y aprobación.
+THRESHOLDS_VERSION = "umbrales-v1.0-documento-final"
+THRESHOLDS_APPROVAL = "Preliminares del documento final; pendiente la firma del CFO del cliente (matriz de autoridad)."
+ACCEPT_MAX, REVIEW_MAX = 30, 70
+# El perfil biométrico se renueva al menos una vez al año.
+PROFILE_MAX_AGE_DAYS = 365
+DIRECTORY_PATH = ROOT / "config/directory.json"

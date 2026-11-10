@@ -18,7 +18,8 @@ from vericall.video import VideoError
 SOURCES = {"simulated": "Llamada simulada con video público",
            "file": "Llamada simulada con video propio",
            "camera": "Cámara web del equipo",
-           "screen": "Ventana compartida de la videollamada"}
+           "screen": "Ventana compartida de la videollamada",
+           "deepfake_camera": "Cámara propia con deepfake en vivo (ataque simulado consentido)"}
 
 
 class SessionNotFound(KeyError):
@@ -40,8 +41,11 @@ def compact(summary: dict) -> dict:
 
 
 class LiveSession:
-    def __init__(self, source: str, caller: str, sample_id: str | None, video_sha256: str | None = None):
+    def __init__(self, source: str, caller: str, sample_id: str | None, video_sha256: str | None = None,
+                 requester_id: str | None = None, faceswap: dict | None = None):
         self.id = str(uuid4())
+        self.faceswap = faceswap
+        self.requester_id = requester_id
         self.source, self.caller, self.sample_id, self.video_sha256 = source, caller, sample_id, video_sha256
         self.started = self.last_seen = time.monotonic()
         self.started_utc = datetime.now(timezone.utc).isoformat()
@@ -74,12 +78,13 @@ class LiveMonitor:
         now = time.monotonic()
         self.sessions = {key: value for key, value in self.sessions.items() if now - value.last_seen < LIVE_IDLE_SECONDS}
 
-    def start(self, source: str, caller: str, sample_id: str | None = None, video_sha256: str | None = None) -> LiveSession:
+    def start(self, source: str, caller: str, sample_id: str | None = None, video_sha256: str | None = None,
+              requester_id: str | None = None, faceswap: dict | None = None) -> LiveSession:
         with self._lock:
             self._purge()
             if len(self.sessions) >= LIVE_MAX_SESSIONS:
                 raise TooManySessions("Hay tres llamadas monitoreadas a la vez. Finaliza una antes de iniciar otra.")
-            session = LiveSession(source, caller, sample_id, video_sha256)
+            session = LiveSession(source, caller, sample_id, video_sha256, requester_id, faceswap)
             self.sessions[session.id] = session
             return session
 
@@ -145,8 +150,10 @@ class LiveMonitor:
                          "recent_window_frames": LIVE_WINDOW_FRAMES,
                          "frames": frames, "duration_seconds": duration,
                          "live": {"source": session.source, "source_label": SOURCES[session.source],
-                                  "caller_claimed_identity": session.caller, "sample_id": session.sample_id,
+                                  "caller_claimed_identity": session.caller,
+                                  "requester_id": session.requester_id, "sample_id": session.sample_id,
                                   "local_video_sha256": session.video_sha256,
+                                  "simulated_deepfake": session.faceswap,
                                   "call_started_utc": session.started_utc},
                          "model": {"id": MODEL_ID, "revision": MODEL_REVISION, "sha256": MODEL_SHA256,
                                    "executed": any(row["faces"] for row in frames), "device": "cpu",

@@ -7,13 +7,17 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+import cv2
 from flask import Flask, abort, jsonify, render_template, request, send_file
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from vericall.audit import AlreadyResolved, AuditError, AuditStore
 from vericall.config import MAX_VIDEO_BYTES, ROOT
-from vericall.decision import InputError, evaluate, positive_money, resolve
+from vericall.decision import (CONTEXT_FLAGS, InputError, evaluate, find_requester,
+                               load_directory, positive_money, profile_status, resolve, safe_mode_change)
 from vericall.detector import ModelUnavailable, digest_file, model_status
+from vericall.faceswap import ENGINE as FACESWAP_ENGINE, PRESETS, FaceSwapper, SourceNotFound, decode, image_hash, preset_frame
+from vericall.governance import dashboard, safe_mode_state
 from vericall.jobs import JobManager, QueueFull
 from vericall.live import SOURCES, LiveMonitor, SessionNotFound, TooManySessions
 from vericall.pipeline import analyze
@@ -28,21 +32,23 @@ ALLOWED_SUFFIXES = {".avi", ".mp4", ".mov", ".webm"}
 def transfer_inputs(form) -> dict:
     return {"amount": str(positive_money(form.get("amount", "500000"), "El monto")),
             "limit": str(positive_money(form.get("limit", "1000000"), "El límite")),
-            "new_beneficiary": form.get("new_beneficiary") == "yes"}
+            "new_beneficiary": form.get("new_beneficiary") == "yes",
+            "context": {flag: form.get(flag) == "yes" for flag in CONTEXT_FLAGS}}
 
 
 def analyst_name(form) -> str:
     return (form.get("analyst") or "").strip()[:80] or "Analista de tesorería"
 
 
-def create_app(audit_path: Path | None = None, analysis_function=None, live_detector=None) -> Flask:
+def create_app(audit_path: Path | None = None, analysis_function=None, live_detector=None, face_swapper=None) -> Flask:
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = MAX_VIDEO_BYTES + 1024 * 1024
     app.config["MAX_FORM_MEMORY_SIZE"] = 100_000
     store = AuditStore(Path(audit_path or os.environ.get("VERICALL_DB_PATH", ROOT / "instance/vericall.sqlite3")))
     jobs = JobManager()
     live = LiveMonitor(live_detector)
-    app.extensions.update(vericall_store=store, vericall_jobs=jobs, vericall_live=live)
+    swapper = face_swapper or FaceSwapper()
+    app.extensions.update(vericall_store=store, vericall_jobs=jobs, vericall_live=live, vericall_swapper=swapper)
     analysis_function = analysis_function or analyze
 
     @app.before_request
@@ -66,7 +72,7 @@ def create_app(audit_path: Path | None = None, analysis_function=None, live_dete
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "service": "vericall-v2", "model": model_status()}
+        return {"status": "ok", "service": "vericall-v4", "model": model_status()}
 
     @app.get("/api/samples")
     def samples():
@@ -88,6 +94,7 @@ def create_app(audit_path: Path | None = None, analysis_function=None, live_dete
             if request.form.get("consent") != "yes":
                 raise InputError("Confirma la autorización de uso del video antes de analizarlo.")
             transfer, analyst = transfer_inputs(request.form), analyst_name(request.form)
+            requester = find_requester(request.form.get("requester_id"))
             sample_id = request.form.get("sample_id", "custom")
             if sample_id == "custom":
                 upload = request.files.get("video")
@@ -116,7 +123,8 @@ def create_app(audit_path: Path | None = None, analysis_function=None, live_dete
                 try:
                     video_hash = digest_file(path)
                     detection = analysis_function(path, progress=progress)
-                    decision = evaluate(**transfer, detection=detection)
+                    decision = evaluate(**transfer, detection=detection, requester=requester,
+                                        safe_mode=safe_mode_state(store)["active"])
                     progress(96, "Guardando la decisión y sus evidencias")
                     return store.record({"source": "upload" if sample_id == "custom" else "sample",
                                          "video_sha256": video_hash, "sample_id": None if sample_id == "custom" else sample_id,
@@ -161,8 +169,15 @@ def create_app(audit_path: Path | None = None, analysis_function=None, live_dete
                 video_sha256 = (request.form.get("video_sha256") or "").lower()
                 if not re.fullmatch(r"[0-9a-f]{64}", video_sha256):
                     raise InputError("Falta la huella SHA-256 del video propio.")
-            caller = (request.form.get("caller") or "").strip()[:80] or "Interlocutor sin identificar"
-            session = live.start(source, caller, sample_id, video_sha256)
+            faceswap = None
+            if source == "deepfake_camera":
+                try:
+                    faceswap = {"engine": FACESWAP_ENGINE, **swapper.origin(request.form.get("faceswap_source_id"))}
+                except SourceNotFound as error:
+                    raise InputError(str(error.args[0])) from None
+            requester = find_requester(request.form.get("requester_id"))
+            caller = (request.form.get("caller") or "").strip()[:80] or f"{requester['name']} · {requester['title']}"
+            session = live.start(source, caller, sample_id, video_sha256, requester["id"], faceswap)
         except InputError as error:
             return jsonify(error=str(error)), 400
         except TooManySessions as error:
@@ -186,8 +201,10 @@ def create_app(audit_path: Path | None = None, analysis_function=None, live_dete
         try:
             transfer, analyst = transfer_inputs(request.form), analyst_name(request.form)
             session, detection = live.detection(session_id)
-            decision = evaluate(**transfer, detection=detection)
+            decision = evaluate(**transfer, detection=detection, requester=find_requester(session.requester_id),
+                                safe_mode=safe_mode_state(store)["active"])
             entry = store.record({"source": "live", "video_sha256": session.video_sha256, "sample_id": session.sample_id,
+                                  "reference_label": "fake" if session.source == "deepfake_camera" else None,
                                   "live_session_id": session.id, "analyst": analyst, "consent_declared": True,
                                   "detection": detection, "decision": decision})
         except InputError as error:
@@ -210,7 +227,7 @@ def create_app(audit_path: Path | None = None, analysis_function=None, live_dete
             entry = store.resolve(decision_id, lambda decision: resolve(
                 decision, outcome=form.get("outcome", ""), role=form.get("role", ""), actor=form.get("actor", ""),
                 alternate_verified=form.get("alternate_verified") == "yes", channel=form.get("channel", ""),
-                now=datetime.now(timezone.utc)))
+                justification=form.get("justification", ""), now=datetime.now(timezone.utc)))
         except KeyError:
             return jsonify(error="Decisión no encontrada."), 404
         except InputError as error:
@@ -221,6 +238,95 @@ def create_app(audit_path: Path | None = None, analysis_function=None, live_dete
             return jsonify(error=str(error)), 503
         return jsonify(entry), 201
 
+    @app.get("/api/faceswap/presets")
+    def faceswap_presets():
+        return jsonify([{"id": key, "person": PUBLIC_SAMPLES[key].get("person", key), "thumbnail": f"/api/faceswap/presets/{key}.jpg"}
+                        for key in PRESETS if key in PUBLIC_SAMPLES and (ROOT / PUBLIC_SAMPLES[key]["path"]).exists()])
+
+    @app.get("/api/faceswap/presets/<preset_id>.jpg")
+    def faceswap_thumbnail(preset_id):
+        if preset_id not in PRESETS or preset_id not in PUBLIC_SAMPLES:
+            abort(404)
+        frame = preset_frame(ROOT / PUBLIC_SAMPLES[preset_id]["path"], PRESETS[preset_id])
+        height, width = frame.shape[:2]
+        crop = frame[int(height * .05):int(height * .6), int(width * .34):int(width * .66)]
+        response = app.response_class(cv2.imencode(".jpg", cv2.resize(crop, (120, 120 * crop.shape[0] // crop.shape[1])))[1].tobytes(),
+                                      mimetype="image/jpeg")
+        response.headers["Cache-Control"] = "max-age=3600"
+        return response
+
+    @app.post("/api/faceswap/sources")
+    def faceswap_source():
+        try:
+            preset_id = request.form.get("preset_id")
+            if preset_id:
+                if preset_id not in PRESETS or preset_id not in PUBLIC_SAMPLES:
+                    raise InputError("Rostro de referencia no reconocido.")
+                image = preset_frame(ROOT / PUBLIC_SAMPLES[preset_id]["path"], PRESETS[preset_id])
+                origin = {"origin": "preset", "preset_id": preset_id, "person": PUBLIC_SAMPLES[preset_id].get("person")}
+            else:
+                if request.form.get("consent") != "yes":
+                    raise InputError("Confirma que la persona de la foto autorizó usar su rostro en esta demostración.")
+                upload = request.files.get("photo")
+                data = upload.read() if upload else b""
+                image = decode(data, "La foto")
+                origin = {"origin": "photo", "photo_sha256": image_hash(data), "consent_declared": True}
+            return jsonify(swapper.add_source(image, origin)), 201
+        except InputError as error:
+            return jsonify(error=str(error)), 400
+        except VideoError as error:
+            return jsonify(error=str(error)), 400
+        except ModelUnavailable as error:
+            return jsonify(error=str(error)), 503
+
+    @app.post("/api/faceswap/frame")
+    def faceswap_frame():
+        upload = request.files.get("frame")
+        try:
+            frame = decode(upload.read() if upload else b"", "El cuadro")
+            output, faces = swapper.swap(request.form.get("source_id", ""), frame)
+        except SourceNotFound as error:
+            return jsonify(error=str(error.args[0])), 404
+        except VideoError as error:
+            return jsonify(error=str(error)), 400
+        except ModelUnavailable as error:
+            return jsonify(error=str(error)), 503
+        # El cuadro se devuelve y se descarta: no se guarda en disco ni en la bitácora.
+        response = app.response_class(cv2.imencode(".jpg", output, [cv2.IMWRITE_JPEG_QUALITY, 88])[1].tobytes(), mimetype="image/jpeg")
+        response.headers["X-Faces"] = str(faces)
+        return response
+
+    @app.get("/api/scenarios")
+    def scenarios():
+        data = json.loads((ROOT / "config/scenarios.json").read_text())
+        data["scenarios"] = [scenario for scenario in data["scenarios"]
+                             if scenario.get("sample_id") is None or scenario["sample_id"] in PUBLIC_SAMPLES]
+        return jsonify(data)
+
+    @app.get("/api/directory")
+    def directory():
+        data = load_directory()
+        return jsonify({"version": data["version"], "source": data["source"],
+                        "executives": [e | {"profile": profile_status(e)} for e in data["executives"]]})
+
+    @app.get("/api/governance")
+    def governance():
+        return jsonify(dashboard(store, PUBLIC_SAMPLES))
+
+    @app.post("/api/governance/safe-mode")
+    def safe_mode():
+        form = request.form
+        try:
+            change = safe_mode_change(active=form.get("active") == "yes", role=form.get("role", ""),
+                                      actor=form.get("actor", ""), reason=form.get("reason", ""),
+                                      current=safe_mode_state(store)["active"])
+            event = store.append_event("safe_mode", change)
+        except InputError as error:
+            return jsonify(error=str(error)), 400
+        except AuditError as error:
+            return jsonify(error=str(error)), 503
+        return jsonify(event), 201
+
     @app.get("/api/audit/verify")
     def verify_audit():
         return jsonify(store.verify())
@@ -230,7 +336,8 @@ def create_app(audit_path: Path | None = None, analysis_function=None, live_dete
         return jsonify([{key: value for key, value in entry.items() if key != "detection"}
                         | {"source": entry.get("source", "sample" if entry.get("sample_id") else "upload"),
                            "verdict": entry["detection"]["verdict"], "fake_score": entry["detection"]["fake_score"],
-                           "caller": entry["detection"].get("live", {}).get("caller_claimed_identity")}
+                           "caller": entry["detection"].get("live", {}).get("caller_claimed_identity"),
+                           "requester": (entry["decision"].get("inputs", {}).get("requester") or {}).get("name")}
                         for entry in store.recent()])
 
     @app.get("/api/decisions/<decision_id>")

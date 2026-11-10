@@ -75,6 +75,18 @@ class AuditStore:
         integrity = self._write("decision", entry["decision_id"], entry["decision_id"], entry)
         return {**entry, "integrity": integrity}
 
+    def append_event(self, kind: str, payload: dict) -> dict:
+        """Eventos de gobierno (p. ej. modo seguro) en la misma cadena que las decisiones."""
+        entry = {**payload, "event_id": str(uuid4()), "kind": kind,
+                 "timestamp_utc": datetime.now(timezone.utc).isoformat()}
+        integrity = self._write(kind, entry["event_id"], entry["event_id"], entry)
+        return {**entry, "integrity": integrity}
+
+    def events(self, kind: str, limit=50) -> list[dict]:
+        with self.connect() as db:
+            rows = db.execute("SELECT payload, seq, hash FROM ledger WHERE kind = ? ORDER BY seq DESC LIMIT ?", (kind, limit)).fetchall()
+        return [json.loads(payload) | {"integrity": {"seq": seq, "hash": digest}} for payload, seq, digest in rows]
+
     def resolve(self, decision_id: str, build) -> dict:
         """`build(decision)` valida las reglas y devuelve la resolución; solo se admite una por decisión."""
         with self._lock:
@@ -110,9 +122,9 @@ class AuditStore:
             entries = self._with_resolutions(db, rows)
         return entries[0] if entries else None
 
-    def recent(self, limit=50) -> list[dict]:
+    def recent(self, limit: int | None = 50) -> list[dict]:
         with self.connect() as db:
-            rows = db.execute("SELECT payload, seq, hash, prev_hash FROM ledger WHERE kind = 'decision' ORDER BY seq DESC LIMIT ?", (limit,)).fetchall()
+            rows = db.execute("SELECT payload, seq, hash, prev_hash FROM ledger WHERE kind = 'decision' ORDER BY seq DESC LIMIT ?", (-1 if limit is None else limit,)).fetchall()
             return self._with_resolutions(db, rows)
 
     def verify(self) -> dict:

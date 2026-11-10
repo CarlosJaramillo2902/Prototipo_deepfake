@@ -1,0 +1,76 @@
+{
+  "version": "directorio-demo-2026-11",
+  "source": "Simulación del directorio de la empresa cliente, del enrolamiento biométrico y del historial del ERP. En un piloto llegaría por el contrato de datos con el ERP, con sincronización diaria.",
+  "executives": [
+    {
+      "id": "carolina_ruiz",
+      "name": "Carolina Ruiz",
+      "title": "Gerente general",
+      "is_cfo": false,
+      "enrolled_on": "2026-03-02",
+      "consent": "vigente",
+      "registered_phone": "+57 310 *** 4821",
+      "habitual_max_amount": "800000",
+      "usual_hours": [
+        7,
+        19
+      ]
+    },
+    {
+      "id": "daniel_ortiz",
+      "name": "Daniel Ortiz",
+      "title": "Director de compras",
+      "is_cfo": false,
+      "enrolled_on": "2026-02-10",
+      "consent": "vigente",
+      "registered_phone": "+57 312 *** 3390",
+      "habitual_max_amount": "600000",
+      "usual_hours": [
+        7,
+        19
+      ]
+    },
+    {
+      "id": "maria_gomez",
+      "name": "María Gómez",
+      "title": "CFO · Directora financiera",
+      "is_cfo": true,
+      "enrolled_on": "2026-01-20",
+      "consent": "vigente",
+      "registered_phone": "+57 315 *** 0937",
+      "habitual_max_amount": "2000000",
+      "usual_hours": [
+        7,
+        20
+      ]
+    },
+    {
+      "id": "andres_pardo",
+      "name": "Andrés Pardo",
+      "title": "Director comercial",
+      "is_cfo": false,
+      "enrolled_on": "2025-06-15",
+      "consent": "vigente",
+      "registered_phone": "+57 301 *** 5512",
+      "habitual_max_amount": "300000",
+      "usual_hours": [
+        8,
+        18
+      ]
+    },
+    {
+      "id": "sofia_herrera",
+      "name": "Sofía Herrera",
+      "title": "Directora jurídica",
+      "is_cfo": false,
+      "enrolled_on": "2026-05-11",
+      "consent": "revocado",
+      "registered_phone": "+57 320 *** 7704",
+      "habitual_max_amount": "150000",
+      "usual_hours": [
+        8,
+        18
+      ]
+    }
+  ]
+}
